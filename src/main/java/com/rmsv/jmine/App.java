@@ -6,6 +6,7 @@ import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.NoHeadException;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
+import org.eclipse.jgit.diff.RawTextComparator;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;
 import org.eclipse.jgit.errors.MissingObjectException;
 import org.eclipse.jgit.lib.ObjectId;
@@ -22,8 +23,7 @@ import org.eclipse.jgit.treewalk.filter.TreeFilter;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
  * Hello world!
@@ -48,11 +48,21 @@ public class App
 
             try (Git git = new Git(repository)) {
                 Iterable<RevCommit> commits = git.log().all().call();
-                int count = 0;
+                //int count = 0;
                 ObjectId newHead = null, oldHead = null;
+                Map<String, Integer> commiters = new HashMap<>();
+                final Map<String, List<String>> changes = new HashMap<>();
+                //final String commiter;
                 for (RevCommit commit : commits) {
+                    final String commiter = commit.getAuthorIdent().getName();
+                    System.out.println("\n\nLogCommit: " + commit.getShortMessage() + " - "+ commiter);
 
-                    System.out.println("\n\nLogCommit: " + commit.getShortMessage() + " - "+ commit.getAuthorIdent().getName());
+                    if(commiters.containsKey(commiter)){
+                        Integer a = commiters.get(commiter)+1;
+                        commiters.replace(commiter, a);
+                    }else{
+                        commiters.put(commiter, 1);
+                    }
 
                     newHead = commit.getTree().getId();
                     if(oldHead != null){
@@ -70,15 +80,39 @@ public class App
                                     .setNewTree(newTreeIter)
                                     .setOldTree(oldTreeIter)
                                     .call();
-                            for (DiffEntry entry : diffs) {
-                                System.out.println("\nEntry: " + entry + ", from: " + entry.getOldId() + ", to: " + entry.getNewId()+"\n\n");
+                            diffs.stream().filter(d -> d.getNewPath().endsWith(".java")).forEach(entry -> {
+                                //System.out.println("\nEntry: " + entry + ", from: " + entry.getOldId() + ", to: " + entry.getNewId()+"\n\n");
+                                //entry.getNewPath()
 
-                                try (DiffFormatter formatter = new DiffFormatter(System.out)) {
-                                    formatter.setRepository(repository);
-                                    formatter.format(entry);
+                                if(changes.containsKey(entry.getNewPath())){
+                                    final List<String> l = changes.get(entry.getNewPath());
+                                    if (!l.contains(commiter)){
+                                        l.add(commiter);
+                                        changes.replace(commiter, l);
+                                    }
+                                }else{
+                                    final List<String> l = new ArrayList<>();
+                                    l.add(commiter);
+                                    changes.put(entry.getNewPath(), l);
                                 }
+                                /*try (DiffFormatter formatter = new DiffFormatter(System.out)) {
+                                    formatter.setRepository(repository);
+                                    //formatter.setDiffComparator(RawTextComparator.DEFAULT);
+                                    formatter.format(entry);
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                }*/
+                            });
+
+                            //for (DiffEntry entry : diffs) {
+                                //System.out.println("\nEntry: " + entry + ", from: " + entry.getOldId() + ", to: " + entry.getNewId()+"\n\n");
+
+                                //try (DiffFormatter formatter = new DiffFormatter(System.out)) {
+                                //    formatter.setRepository(repository);
+                                //    formatter.format(entry);
+                                //}
                                 //System.out.println("Entry: " + entry);
-                            }
+                            //}
                         }
 
                     }
@@ -97,9 +131,22 @@ public class App
                         }
                     }
 */
-                    count++;
+                    //count++;
                 }
-                System.out.println(count);
+
+
+                for (Map.Entry entry : commiters.entrySet()) {
+                    System.out.println(entry.getKey() + ", " + entry.getValue());
+                }
+
+                for (Map.Entry entry : changes.entrySet()) {
+                    System.out.println(entry.getKey()+" =>");
+                    for(String user : (List<String>)entry.getValue()){
+                        System.out.println("\t=>"+user);
+                    }
+                }
+
+                //System.out.println(count);
             } catch (NoHeadException e) {
                 e.printStackTrace();
             } catch (GitAPIException e) {
